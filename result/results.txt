@@ -1,4 +1,0 @@
-epoch=1:The AP of new ranking is 0.6997784321873777.
-epoch=2:The AP of new ranking is 0.7020820835423224.
-epoch=3:The AP of new ranking is 0.6939284244194983.
-epoch=4:The AP of new ranking is 0.6871016518052229.

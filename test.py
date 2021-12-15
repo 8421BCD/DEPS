@@ -1,9 +1,7 @@
 import os
 import torch
+import numpy as np
 
-a = torch.rand(3, 2)
+a = [[1, 2]]
+a.extend([[0] * 2 for i in range(2)])
 print(a)
-print(a[[0, 1], :])
-
-
-

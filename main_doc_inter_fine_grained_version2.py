@@ -6,7 +6,7 @@ import torch
 import pickle
 import numpy as np
 from torch.functional import Tensor
-from model.Model_no_doc_inter import Contextual
+from model.Model_doc_inter_fine_grained import Contextual
 import Constants
 import torch
 import torch.nn as nn
@@ -22,8 +22,8 @@ parser.add_argument('--mode', default=1, type=int, help='0-check whether the cod
 parser.add_argument('--cudaid', default=0, type=int, help='the id of the cuda')
 parser.add_argument('--seed', default=100, type=int, help='')
 parser.add_argument('--batch_size', default=64, type=int, help='')
-parser.add_argument('--max_querylen', default=20, type=int, help='the maximum length of query')
-parser.add_argument('--max_doclen', default=30, type=int, help='the maximum length of document')
+parser.add_argument('--max_querylen', default=25, type=int, help='the maximum length of query')
+parser.add_argument('--max_doclen', default=25, type=int, help='the maximum length of document')
 parser.add_argument('--max_qdlen', default=50, type=int, help='the maximum length of the concat of query and document')
 parser.add_argument('--max_hislen', default=50, type=int, help='the maximum length of the long history')
 parser.add_argument('--max_sessionlen', default=20, type=int, help='the maximum length of the session')
@@ -190,21 +190,21 @@ def prepare_train_data(sat_list, feature_list, doc_list, qids, long_qdids, short
 		return
 	short_qdids_his = short_qdids[-args.max_sessionlen:]
 	long_qdids_his = long_qdids[-args.max_hislen:]
-	init_short_qdids = np.zeros((args.max_sessionlen,args.max_qdlen))
-	init_long_qdids = np.zeros((args.max_hislen,args.max_qdlen))
+	init_short_qdids = np.zeros((args.max_sessionlen, args.max_doc_list + 1, args.max_doclen))
+	init_long_qdids = np.zeros((args.max_hislen, args.max_doc_list + 1, args.max_doclen))
 	# ??? don't understand all the code below
 	init_shortpos = np.zeros(args.max_sessionlen+1)
 	init_shortpos[-1] = args.max_sessionlen+1
 	init_longpos = np.zeros(args.max_hislen+1)
 	init_longpos[-1] = args.max_hislen+1
 
-	for i in range(args.max_sessionlen):
-		init_short_qdids[i][0]=1
+	# for i in range(args.max_sessionlen):
+	# 	init_short_qdids[i][0]=1
 	for i in range(len(short_qdids_his)):
 		init_short_qdids[i] = short_qdids_his[i]
 		init_shortpos[i] = i+1
-	for i in range(args.max_hislen):
-		init_long_qdids[i][0]=1
+	# for i in range(args.max_hislen):
+	# 	init_long_qdids[i][0]=1
 	for i in range(len(long_qdids_his)):
 		init_long_qdids[i] = long_qdids_his[i]
 		init_longpos[i] = i+1
@@ -266,8 +266,8 @@ def prepare_test_data(short_qdids, long_qdids, qids, feature_list, line_list, do
 	for docid in range(len(doc_list)):
 		short_qdids_his = short_qdids[-args.max_sessionlen:]
 		long_qdids_his = long_qdids[-args.max_hislen:]
-		init_short_qdids = np.zeros((args.max_sessionlen,args.max_qdlen))
-		init_long_qdids = np.zeros((args.max_hislen,args.max_qdlen))
+		init_short_qdids = np.zeros((args.max_sessionlen, 51, args.max_doclen))
+		init_long_qdids = np.zeros((args.max_hislen, 51, args.max_doclen))
 		init_shortpos = np.zeros(args.max_sessionlen+1)
 		init_shortpos[-1] = args.max_sessionlen+1
 		init_longpos = np.zeros(args.max_hislen+1)
@@ -275,13 +275,13 @@ def prepare_test_data(short_qdids, long_qdids, qids, feature_list, line_list, do
 
 		# init_sessionpos = np.zeros(args.max_sessionlen+1)
 		# init_sessionpos[-1] = args.max_sessionlen+1
-		for i in range(args.max_sessionlen):
-			init_short_qdids[i][0]=1
+		# for i in range(args.max_sessionlen):  # ???????????????????????????
+		# 	init_short_qdids[i][0]=1
 		for i in range(len(short_qdids_his)):
 			init_short_qdids[i] = short_qdids_his[i]
 			init_shortpos[i] = i+1
-		for i in range(args.max_hislen):
-			init_long_qdids[i][0]=1
+		# for i in range(args.max_hislen):
+		# 	init_long_qdids[i][0]=1
 		for i in range(len(long_qdids_his)):
 			init_long_qdids[i] = long_qdids_his[i]
 			init_longpos[i] = i+1
@@ -347,16 +347,18 @@ def predata():
 			queryid = sessionid + querytime + query
 			qids = sen2qid(query)
 			dids = sen2did(title)			
-
+			max_doc_list_num = 5
 			if queryid != last_queryid:
 				if last_querytime >= '2006-04-03 00:00:00' and last_querytime <= '2006-05-16 00:00:00' and key == 1: # training data
 					prepare_train_data(sat_list, feature_list, doc_list, last_qids, long_qdids, short_qdids)
 					key = 0
 				elif last_querytime > '2006-05-16 00:00:00':
 					prepare_test_data(short_qdids, long_qdids, last_qids, feature_list, line_list, doc_list)
+					max_doc_list_num = 50
 				if intent != '':	# ??? what about the last query
-					qdids = sen2id(intent)
-					short_qdids.append(qdids)
+					doc_list.insert(0, qids)
+					doc_list += [[0] * args.max_doclen for i in range(max_doc_list_num - len(doc_list) + 1)]
+					short_qdids.append(doc_list)
 				if sessionid != last_sessionid:
 					if len(short_qdids) != 0:
 						long_qdids.extend(short_qdids)

@@ -16,3 +16,6 @@
 2021-12-11 17:44:33 [INFO] epoch=3:The AP of new ranking is 0.6639940728449892.
 2021-12-11 18:19:17 [INFO] epoch=4:The AP of new ranking is 0.655322273966451.
 2021-12-11 18:53:56 [INFO] epoch=5:The AP of new ranking is 0.6432766495167762.
+2021-12-14 23:52:14 [INFO] Namespace(batch_size=64, cudaid=0, epochs=5, in_path='../../data/ValidQLSample_HF', log_path='./log/main_no_doc_inter.log', lr=0.001, max_doc_list=5, max_doclen=30, max_hislen=50, max_qdlen=50, max_querylen=20, max_sessionlen=20, mode=0, model_path='model/trained_model.pth', result_path='result/results.txt', seed=888, test_score_path='result/test_score.txt')
+2021-12-14 23:52:53 [INFO] Namespace(batch_size=64, cudaid=0, epochs=5, in_path='../../data/ValidQLSample_HF', log_path='./log/main_no_doc_inter.log', lr=0.001, max_doc_list=5, max_doclen=30, max_hislen=50, max_qdlen=50, max_querylen=20, max_sessionlen=20, mode=0, model_path='model/trained_model.pth', result_path='result/results.txt', seed=888, test_score_path='result/test_score.txt')
+2021-12-14 23:53:24 [INFO] epoch=1:The AP of new ranking is 0.22112624589128194.

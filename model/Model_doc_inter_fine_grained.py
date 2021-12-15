@@ -1,4 +1,3 @@
-''' Define the Transformer model '''
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -290,15 +289,8 @@ class Contextual(nn.Module):
         doc_fine_grained = torch.stack(doc_fine_grained).permute(1, 0, 2, 3)
         return torch.sum(doc_fine_grained, 1)
 
-
-    # 删去docs1, docs2, features1, features2
     def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos, docs, docspos, doc1_order, doc2_order):
-    # def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos):
-        # print(long_qdids.shape, short_qdids.shape)
         all_qdids = torch.cat([long_qdids, short_qdids], 1) # [batch_size, max_hislen + max_sessionlen, max_qdlen]
-        #all_qids = short_qids
-        #print(long_qids[-3])
-
         all_qd_mask = all_qdids.view(-1,self.max_qdlen) # [batch_size * (max_hislen + max_sessionlen), max_qdlen]
         # print(all_qd_mask.shape)
         # print(query.shape, docs1.shape, docs2.shape)
@@ -381,6 +373,7 @@ class Contextual(nn.Module):
         doc2_doclen_vec = torch.stack([batch_docslen_doclen_vec[i, doc2_order[i], :, :] for i in range(len(doc1_order))])
         doc1_fine_grained = self.fine_grained_interaction(doc1_doclen_vec, batch_docslen_doclen_vec)
         doc2_fine_grained = self.fine_grained_interaction(doc2_doclen_vec, batch_docslen_doclen_vec)
+        
         _,doc1_seq_interaction=self.aggragation_function_token_level(doc1_fine_grained)
         _,doc2_seq_interaction=self.aggragation_function_token_level(doc2_fine_grained)
         doc1_seq_interaction = torch.squeeze(doc1_seq_interaction, 0)
