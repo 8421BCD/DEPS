@@ -5,6 +5,7 @@ from matplotlib.ticker import MultipleLocator
 def draw_line_chart(title, note_list, x, y, x_scale, y_scale, label_x, label_y, path = None):
     # plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
     # plt.rcParams['axes.unicode_minus']=False
+    plt.switch_backend('agg')
     for i in range(len(x)):
         plt.plot(x[i], y[i], marker='', mec='r', mfc='w', label=note_list[i], linewidth=2)
     plt.legend(fontsize=16)  # 让图例生效

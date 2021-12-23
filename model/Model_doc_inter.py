@@ -218,7 +218,7 @@ class Contextual(nn.Module):
         return weight
 
     def __init__(
-            self, args, max_querylen, max_qdlen, max_hislen, max_sessionlen, max_doc_list, 
+            self, args, max_querylen, max_qdlen, max_hislen, max_sessionlen, 
             batch_size, d_word_vec=512, d_model=512, d_inner=2048,
             n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1):
 
@@ -253,13 +253,13 @@ class Contextual(nn.Module):
             dropout=dropout)
 
         self.encoder_docs_query = Encoder_high(
-            len_max_seq=max_doc_list+1,
+            len_max_seq=args.max_doc_list_test+1,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
             dropout=dropout)
 
         # get the scores of all the documents
-        self.score_all_7_layer = MLP2(d_word_vec, 1)
+        self.score_all_7_layer = MLP2(200, 1)
         self.feature_layer=nn.Sequential(nn.Linear(98, 1),nn.Tanh())
         # self.gate=nn.Sequential(nn.Linear(self.d_word_vec*2, 1),nn.Sigmoid())
 
@@ -275,14 +275,10 @@ class Contextual(nn.Module):
     def doc2vec(self, doc):
         return torch.mean(self.embedding(doc), -2)
 
-    # 删去docs1, docs2, features1, features2
     def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos, docs, docspos, doc1_order, doc2_order):
-    # def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos):
-        # print(long_qdids.shape, short_qdids.shape)
         all_qdids = torch.cat([long_qdids, short_qdids], 1) # [batch_size, max_hislen + max_sessionlen, max_qdlen]
         #all_qids = short_qids
         #print(long_qids[-3])
-
         all_qd_mask = all_qdids.view(-1,self.max_qdlen) # [batch_size * (max_hislen + max_sessionlen), max_qdlen]
         # print(all_qd_mask.shape)
         # print(query.shape, docs1.shape, docs2.shape)
@@ -339,24 +335,30 @@ class Contextual(nn.Module):
         score_2_6 = self.feature_layer(features2)
         
         ################################## docs-query interaciton score starts ########################################
-        # query_doc2vec = self.doc2vec(query)
-        # docs_doc2vec = self.doc2vec(docs)
-        # query_vec = torch.unsqueeze(query_doc2vec, 1)
-        # query_docs_vec = torch.cat([docs_doc2vec, query_vec], 1)
-        # query_docs_output, *_ = self.encoder_docs_query(query_docs_vec, docspos)
-        # score_all_7 = self.score_all_7_layer(query_docs_output)[:, :-1] # [batch_size, max_docslen, 1]
-        # # print(doc1_order, len(doc1_order), score_all_5.shape)
-        # score_1_7 = torch.stack([score_all_7[i, doc1_order[i]] for i in range(len(doc1_order))])
-        # score_2_7 = torch.stack([score_all_7[i, doc2_order[i]] for i in range(len(doc2_order))])
+        query_doc2vec = self.doc2vec(query)
+        docs_doc2vec = self.doc2vec(docs)
+        query_vec = torch.unsqueeze(query_doc2vec, 1)
+        query_docs_vec = torch.cat([docs_doc2vec, qenc_output_5], 1)
+        query_docs_output, *_ = self.encoder_docs_query(query_docs_vec, docspos)
+        qenc_output_5 = qenc_output_5.repeat(1, query_docs_output.shape[1], 1)
+        query_docs_output_interest = torch.cat((query_docs_output, qenc_output_5), -1)
+        score_all_7 = self.score_all_7_layer(query_docs_output_interest)[:, :-1] # [batch_size, max_docslen, 1]
+        # print(doc1_order, len(doc1_order), score_all_5.shape)
+        score_1_7 = torch.stack([score_all_7[i, doc1_order[i]] for i in range(len(doc1_order))])
+        score_2_7 = torch.stack([score_all_7[i, doc2_order[i]] for i in range(len(doc2_order))])
         ################################## docs-query interaciton score ends ########################################
 
         ################################## docs interaciton score starts########################################
-        # query_doc2vec = self.doc2vec(query)
-        docs_doc2vec = self.doc2vec(docs)
-        query_docs_output, *_ = self.encoder_docs_query(docs_doc2vec, docspos[:, :-1])
-        score_all_7 = self.score_all_7_layer(query_docs_output) # [batch_size, max_docslen, 1]
-        score_1_7 = torch.stack([score_all_7[i, doc1_order[i]] for i in range(len(doc1_order))])
-        score_2_7 = torch.stack([score_all_7[i, doc2_order[i]] for i in range(len(doc2_order))])
+        # docs_doc2vec = self.doc2vec(docs)
+        # docs_output, *_ = self.encoder_docs_query(docs_doc2vec, docspos)
+        # # print(docs_output.shape)
+        # # print(qenc_output_5.repeat(1, docs_output.shape[1], 1).shape)
+        # docs_output = torch.cat((docs_output, qenc_output_5.repeat(1, docs_output.shape[1], 1)), dim=-1)
+        # # print(docs_output.shape)
+        # # exit()
+        # score_all_7 = self.score_all_7_layer(docs_output) # [batch_size, max_docslen, 1]
+        # score_1_7 = torch.stack([score_all_7[i, doc1_order[i]] for i in range(len(doc1_order))])
+        # score_2_7 = torch.stack([score_all_7[i, doc2_order[i]] for i in range(len(doc2_order))])
         ################################## docs interaciton score ends########################################
 
         # score1_all = torch.cat([score_1_1, score_1_2, score_1_3, score_1_4, score_1_5], 1)

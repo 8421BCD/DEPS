@@ -6,6 +6,7 @@ import Constants
 import pickle
 from model.Layers import EncoderLayer, DecoderLayer
 from torch.autograd import Variable
+from model.SubLayers import MultiHeadAttention
 
 __author__ = "Yu-Hsiang Huang"
 vocabulary = pickle.load(open('../../data/vocab.dict', 'rb'))
@@ -41,7 +42,6 @@ def get_attn_key_pad_mask(seq_k, seq_q):
     len_q = seq_q.size(1)
     padding_mask = seq_k.eq(Constants.PAD)
     padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
-
     return padding_mask
 
 def get_subsequent_mask(seq):
@@ -252,8 +252,8 @@ class Contextual(nn.Module):
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
             dropout=dropout)
 
-        self.encoder_docs_query = Encoder_high(
-            len_max_seq=args.max_doc_list_test+1,
+        self.encoder_docs = Encoder_high(
+            len_max_seq=args.max_doclen,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
             dropout=dropout)
@@ -261,10 +261,11 @@ class Contextual(nn.Module):
         # get the scores of all the documents
         self.score_all_7_layer = MLP2(d_word_vec, 1)
         self.feature_layer=nn.Sequential(nn.Linear(98, 1),nn.Tanh())
-        # self.gate=nn.Sequential(nn.Linear(self.d_word_vec*2, 1),nn.Sigmoid())
-
-        # self.score_layer = nn.Linear(5, 1)
-        self.score_layer = nn.Linear(6, 1)
+        self.multiheadattention = MultiHeadAttention(n_head=8, d_model=d_model, d_k=d_k, d_v=d_v)
+        self.rnn1 = nn.GRU(d_word_vec,d_word_vec,batch_first=True)
+        self.rnn2 = nn.GRU(d_word_vec,d_word_vec,batch_first=True)
+        self.score_8_linear = nn.Sequential(nn.Linear(200, 1), nn.Tanh())
+        self.score_layer = nn.Linear(7, 1)
 
         self.embedding = nn.Embedding(len(vocabulary)+1, self.d_word_vec)
         self.embedding.weight.data.copy_(self.load_embedding())
@@ -275,14 +276,21 @@ class Contextual(nn.Module):
     def doc2vec(self, doc):
         return torch.mean(self.embedding(doc), -2)
 
-    # 删去docs1, docs2, features1, features2
-    def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos, docs, docspos, doc1_order, doc2_order):
-    # def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos):
-        # print(long_qdids.shape, short_qdids.shape)
-        all_qdids = torch.cat([long_qdids, short_qdids], 1) # [batch_size, max_hislen + max_sessionlen, max_qdlen]
-        #all_qids = short_qids
-        #print(long_qids[-3])
+    def fine_grained_interaction(self, doc_doclen_vec, batch_docslen_doclen_vec):
+        '''
+        doc_doclen_vec: [batch_size, max_doclen, d_word_vec]
+        batch_docslen_doclen_vec: [batch_size, max_doc_list, max_doclen, d_word_vec]
+        '''
+        doc_fine_grained = []
+        # interact with all the docs
+        for i in range(batch_docslen_doclen_vec.shape[1]):
+            output, attn = self.multiheadattention(doc_doclen_vec, batch_docslen_doclen_vec[:, i, :, :], batch_docslen_doclen_vec[:, i, :, :])
+            doc_fine_grained.append(output)
+        doc_fine_grained = torch.stack(doc_fine_grained).permute(1, 0, 2, 3)
+        return doc_fine_grained
 
+    def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos, docs, docspos, doc1_order, doc2_order):
+        all_qdids = torch.cat([long_qdids, short_qdids], 1) # [batch_size, max_hislen + max_sessionlen, max_qdlen]
         all_qd_mask = all_qdids.view(-1,self.max_qdlen) # [batch_size * (max_hislen + max_sessionlen), max_qdlen]
         # print(all_qd_mask.shape)
         # print(query.shape, docs1.shape, docs2.shape)
@@ -297,7 +305,6 @@ class Contextual(nn.Module):
         qenc_output_2, *_ = self.encoder_query(qenc_output_1, query)
         d1enc_output_2, *_ = self.encoder_query(d1enc_output_1, docs1)
         d2enc_output_2, *_ = self.encoder_query(d2enc_output_1, docs2)
-
         all_qdenc = torch.sum(all_qdenc, 1)
         qenc_output_3 = torch.sum(qenc_output_2, 1)
         d1enc_output_3 = torch.sum(d1enc_output_2, 1)
@@ -338,32 +345,39 @@ class Contextual(nn.Module):
         score_1_6 = self.feature_layer(features1)
         score_2_6 = self.feature_layer(features2)
         
-        ################################## docs-query interaciton score starts ########################################
-        # query_doc2vec = self.doc2vec(query)
-        # docs_doc2vec = self.doc2vec(docs)
-        # query_vec = torch.unsqueeze(query_doc2vec, 1)
-        # query_docs_vec = torch.cat([docs_doc2vec, query_vec], 1)
-        # query_docs_output, *_ = self.encoder_docs_query(query_docs_vec, docspos)
-        # score_all_7 = self.score_all_7_layer(query_docs_output)[:, :-1] # [batch_size, max_docslen, 1]
-        # # print(doc1_order, len(doc1_order), score_all_5.shape)
-        # score_1_7 = torch.stack([score_all_7[i, doc1_order[i]] for i in range(len(doc1_order))])
-        # score_2_7 = torch.stack([score_all_7[i, doc2_order[i]] for i in range(len(doc2_order))])
-        ################################## docs-query interaciton score ends ########################################
 
-        ################################## docs interaciton score starts########################################
-        # query_doc2vec = self.doc2vec(query)
-        # docs_doc2vec = self.doc2vec(docs)
-        # query_docs_output, *_ = self.encoder_docs_query(docs_doc2vec, docspos[:, :-1])
-        # score_all_7 = self.score_all_7_layer(query_docs_output) # [batch_size, max_docslen, 1]
-        # score_1_7 = torch.stack([score_all_7[i, doc1_order[i]] for i in range(len(doc1_order))])
-        # score_2_7 = torch.stack([score_all_7[i, doc2_order[i]] for i in range(len(doc2_order))])
-        ################################## docs interaciton score ends########################################
+        ################################## fine grained interaction starts ########################################
+        batch_docslen_doclen_vec = self.embedding(docs)
+        for i in range(batch_docslen_doclen_vec.shape[1]):
+            batch_docslen_doclen_vec[:, i], *_ = self.encoder_docs(batch_docslen_doclen_vec[:, i], docs[:, i])
 
-        # score1_all = torch.cat([score_1_1, score_1_2, score_1_3, score_1_4, score_1_5], 1)
-        # score2_all = torch.cat([score_2_1, score_2_2, score_2_3, score_2_4, score_2_5], 1)
-
-        score1_all = torch.cat([score_1_1, score_1_2, score_1_3, score_1_4, score_1_5, score_1_6], 1)
-        score2_all = torch.cat([score_2_1, score_2_2, score_2_3, score_2_4, score_2_5, score_2_6], 1)
+        doc1_doclen_vec = torch.stack([batch_docslen_doclen_vec[i, doc1_order[i], :, :] for i in range(len(doc1_order))])
+        doc2_doclen_vec = torch.stack([batch_docslen_doclen_vec[i, doc2_order[i], :, :] for i in range(len(doc1_order))])
+        doc1_fine_grained = self.fine_grained_interaction(doc1_doclen_vec, batch_docslen_doclen_vec) # [batch_size, max_doc_list_train/test, max_doclen, embedding]
+        doc2_fine_grained = self.fine_grained_interaction(doc2_doclen_vec, batch_docslen_doclen_vec)
+        
+        doc1_fine_grained_matrix, doc2_fine_grained_matrix = [], []
+        for i in range(doc1_fine_grained.shape[1]):
+            _, doc1_fine_grained_vec = self.rnn1(doc1_fine_grained[:, i])
+            _, doc2_fine_grained_vec = self.rnn1(doc2_fine_grained[:, i])
+            doc1_fine_grained_matrix.append(doc1_fine_grained_vec.squeeze(0))
+            doc2_fine_grained_matrix.append(doc2_fine_grained_vec.squeeze(0))
+        doc1_fine_grained_matrix = torch.stack(doc1_fine_grained_matrix, 1)
+        doc2_fine_grained_matrix = torch.stack(doc2_fine_grained_matrix, 1)
+        # print(doc1_fine_grained_matrix.shape)
+        # exit()
+        _,doc1_seq_interaction=self.rnn2(doc1_fine_grained_matrix)
+        _,doc2_seq_interaction=self.rnn2(doc2_fine_grained_matrix)
+        doc1_seq_interaction = torch.squeeze(doc1_seq_interaction, 0)
+        doc2_seq_interaction = torch.squeeze(doc2_seq_interaction, 0)
+        # concat the user interest
+        doc1_seq_interaction_interest = torch.cat((doc1_seq_interaction, qenc_output_5.squeeze(1)), 1)
+        doc2_seq_interaction_interest = torch.cat((doc2_seq_interaction, qenc_output_5.squeeze(1)), 1)
+        score_1_8 = self.score_8_linear(doc1_seq_interaction_interest)
+        score_2_8 = self.score_8_linear(doc2_seq_interaction_interest)
+        ################################## fine grained interaction ends ########################################
+        score1_all = torch.cat([score_1_1, score_1_2, score_1_3, score_1_4, score_1_5, score_1_6, score_1_8], 1)
+        score2_all = torch.cat([score_2_1, score_2_2, score_2_3, score_2_4, score_2_5, score_2_6, score_2_8], 1)
         score_1 = self.score_layer(score1_all)
         score_2 = self.score_layer(score2_all)
 

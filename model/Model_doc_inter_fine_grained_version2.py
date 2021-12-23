@@ -219,7 +219,7 @@ class Contextual(nn.Module):
         return weight
 
     def __init__(
-            self, args, max_querylen, max_qdlen, max_hislen, max_sessionlen, max_doc_list, 
+            self, args, max_querylen, max_qdlen, max_hislen, max_sessionlen,
             batch_size, d_word_vec=512, d_model=512, d_inner=2048,
             n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1):
 
@@ -254,7 +254,7 @@ class Contextual(nn.Module):
             dropout=dropout)
 
         self.encoder_docs_query = Encoder_high(
-            len_max_seq=max_doc_list+1,
+            len_max_seq=args.max_doc_list_test+1,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
             dropout=dropout)
@@ -283,37 +283,37 @@ class Contextual(nn.Module):
         '''
         doc_fine_grained = []
         # interact with all the docs
-        for i in range(self.args.max_doc_list):
+        for i in range(batch_docslen_doclen_vec.shape[1]):
             output, attn = self.multiheadattention(doc_doclen_vec, batch_docslen_doclen_vec[:, i, :, :], batch_docslen_doclen_vec[:, i, :, :])
             doc_fine_grained.append(output)
         doc_fine_grained = torch.stack(doc_fine_grained).permute(1, 0, 2, 3)
         return torch.sum(doc_fine_grained, 1)
 
-    def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos, docs, docspos, doc1_order, doc2_order):
-        print(short_qdids.shape)
-        exit()
-        
-        all_qdids = torch.cat([long_qdids, short_qdids], 1) # [batch_size, max_hislen + max_sessionlen, max_qdlen]
-        all_qd_mask = all_qdids.view(-1,self.max_qdlen) # [batch_size * (max_hislen + max_sessionlen), max_qdlen]
-        # print(all_qd_mask.shape)
-        # print(query.shape, docs1.shape, docs2.shape)
+    def forward(self, query, docs1, docs2, features1, features2, long_qdids, longpos, short_qdids, shortpos, docs, docspos, doc1_order, doc2_order):        
+        # long_short_qdids_embedding = self.embedding(long_short_qdids)
+        # long_short_sat_vec = self.fine_grained_interaction(long_short_qdids_embedding[:1, 1, :, :], long_short_qdids_embedding[:1, 1:, :, :])
+    
         qenc_output_1 = self.embedding(query) # [batch_size, max_querylen, d_word_vec], [batch_size, max_querylen]
         d1enc_output_1 = self.embedding(docs1) # [batch_size, max_querylen, d_word_vec], [batch_size, max_doclen]
         d2enc_output_1 = self.embedding(docs2) # [batch_size, max_querylen, d_word_vec], [batch_size, max_doclen]
-        all_qdenc = self.embedding(all_qdids)  # [batch_size, max_hislen + max_sessionlen, max_qdlen, d_word_vec]
-        # print(qenc_output_1.shape, d1enc_output_1.shape, d2enc_output_1.shape)
-    
-        all_qdenc = all_qdenc.view(-1, self.max_qdlen, self.d_word_vec)
-        all_qdenc, *_ = self.encoder_query(all_qdenc, all_qd_mask)
+
         qenc_output_2, *_ = self.encoder_query(qenc_output_1, query)
         d1enc_output_2, *_ = self.encoder_query(d1enc_output_1, docs1)
         d2enc_output_2, *_ = self.encoder_query(d2enc_output_1, docs2)
 
-        all_qdenc = torch.sum(all_qdenc, 1)
         qenc_output_3 = torch.sum(qenc_output_2, 1)
         d1enc_output_3 = torch.sum(d1enc_output_2, 1)
         d2enc_output_3 = torch.sum(d2enc_output_2, 1)
-        # print(all_qdenc.shape)
+
+
+        all_qdids = torch.cat([long_qdids, short_qdids], 1) # [batch_size, max_hislen + max_sessionlen, max_qdlen]
+        # all_qd_mask = all_qdids.view(-1,self.max_qdlen) # [batch_size * (max_hislen + max_sessionlen), max_qdlen]
+        long_short_qdids = all_qdids.view(-1, self.args.max_doc_list_test + 1, self.args.max_doclen)
+        long_short_qd_vector = self.doc2vec(long_short_qdids)
+        long_short_qd_pos = torch.unsqueeze(torch.arange(1, self.args.max_doc_list_test + 1), 0).repeat(long_short_qd_vector.shape[0], 1).cuda(self.args.cudaid)
+        query_docs_output, *_ = self.encoder_docs_query(long_short_qd_vector[:, 1:, :], long_short_qd_pos)
+        all_qdenc = torch.add(query_docs_output[:, 1, :], long_short_qd_vector[:, 0, :])
+
         all_qdenc = all_qdenc.view(-1, self.max_hislen + self.max_sessionlen, self.d_word_vec)
         long_qdenc, short_qdenc = torch.split(all_qdenc, [self.max_hislen, self.max_sessionlen], 1)
 

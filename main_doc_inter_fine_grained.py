@@ -6,7 +6,7 @@ import torch
 import pickle
 import numpy as np
 from torch.functional import Tensor
-from model.Model_doc_inter_fine_grained import Contextual
+from model.Model_doc_inter_fine_grained_doubleRNN import Contextual
 import Constants
 import torch
 import torch.nn as nn
@@ -27,7 +27,8 @@ parser.add_argument('--max_doclen', default=25, type=int, help='the maximum leng
 parser.add_argument('--max_qdlen', default=50, type=int, help='the maximum length of the concat of query and document')
 parser.add_argument('--max_hislen', default=50, type=int, help='the maximum length of the long history')
 parser.add_argument('--max_sessionlen', default=20, type=int, help='the maximum length of the session')
-parser.add_argument('--max_doc_list', default=5, type=int, help='the maximum size of the document set of training data') #change
+parser.add_argument('--max_doc_list_train', default=50, type=int, help='the maximum size of the document set of train data') #change
+parser.add_argument('--max_doc_list_test', default=50, type=int, help='the maximum size of the document set of test data') #change
 parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 parser.add_argument('--epochs', default=10, type=int, help='')	# change
 parser.add_argument('--in_path', default='../../data/ValidQLSample_HF', type=str, help='the path of data') # change
@@ -103,10 +104,10 @@ def sen2id(sen):
 			idx.append(vocab[word])
 		else:
 			idx.append(vocab['<unk>'])
-	idx = idx[:args.max_qdlen]
+	idx = idx[:args.max_querylen]
 	padding = [0] * (args.max_qdlen - len(idx))
 	idx = idx + padding
-	return	idx
+	return idx
 
 def divide_dataset(filename):  # 检查用户的实验数据中有几个session，滤掉少于一定session的用户
 	session_sum = 0
@@ -209,11 +210,11 @@ def prepare_train_data(sat_list, feature_list, doc_list, qids, long_qdids, short
 		init_long_qdids[i] = long_qdids_his[i]
 		init_longpos[i] = i+1
 	## update
-	doc_list = doc_list[:args.max_doc_list]
-	init_docids = np.zeros((len(doc_list), args.max_doclen))
-	init_docpos = np.zeros(len(doc_list) + 1)
+	doc_list = doc_list[:args.max_doc_list_train]
+	init_docids = np.zeros((args.max_doc_list_train, args.max_doclen))
+	init_docpos = np.zeros(args.max_doc_list_train + 1)
 	init_docpos[-1] = len(doc_list) + 1
-	for i in range(len(doc_list)):
+	for i in range(args.max_doc_list_train):
 		init_docids[i][0]=1
 	for i in range(len(doc_list)):
 		init_docids[i] = doc_list[i]
@@ -252,6 +253,8 @@ def prepare_train_data(sat_list, feature_list, doc_list, qids, long_qdids, short
 
 				## update
 				docs_train.append(init_docids)
+				if len(init_docids) < 5:
+					print(len(init_docids))
 				docs_pos_train.append(init_docpos)
 				if delta[i, j]>0:
 					doc1_order_train.append(j)
@@ -295,10 +298,10 @@ def prepare_test_data(short_qdids, long_qdids, qids, feature_list, line_list, do
 		lines_test.append(line_list[docid].strip('\n'))
 		doc_order_test.append(docid)
 		
-		init_docids = np.zeros((len(doc_list), args.max_doclen))
-		init_docpos = np.zeros(len(doc_list)+1)
+		init_docids = np.zeros((args.max_doc_list_test, args.max_doclen))
+		init_docpos = np.zeros(args.max_doc_list_test + 1)
 		init_docpos[-1] = len(doc_list) + 1
-		for i in range(len(doc_list)):
+		for i in range(args.max_doc_list_test):
 			init_docids[i][0]=1
 		for i in range(len(doc_list)):
 			init_docids[i] = doc_list[i]
@@ -481,7 +484,7 @@ docs_pos_test = []
 doc_order_test = []
 
 set_seed(args.seed)
-model = Contextual(args = args, max_querylen=args.max_querylen, max_qdlen=args.max_qdlen, max_hislen=args.max_hislen, max_sessionlen=args.max_sessionlen, max_doc_list=args.max_doc_list,
+model = Contextual(args = args, max_querylen=args.max_querylen, max_qdlen=args.max_qdlen, max_hislen=args.max_hislen, max_sessionlen=args.max_sessionlen,
 				batch_size=args.batch_size, d_word_vec=100,
 				n_layers=1, n_head=6, d_k=50, d_v=50,
 				d_model=100, d_inner=256, dropout=0.1)

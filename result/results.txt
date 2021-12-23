@@ -1,0 +1,1 @@
+epoch=1:The AP of new ranking is 0.22750168196976486.
