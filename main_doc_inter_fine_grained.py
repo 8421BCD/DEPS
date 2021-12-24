@@ -6,7 +6,7 @@ import torch
 import pickle
 import numpy as np
 from torch.functional import Tensor
-from model.Model_doc_inter_fine_grained_doubleRNN import Contextual
+from model.Model_doc_inter_fine_grained_trans import Contextual
 import Constants
 import torch
 import torch.nn as nn
