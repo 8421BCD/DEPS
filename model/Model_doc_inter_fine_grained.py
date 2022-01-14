@@ -251,7 +251,7 @@ class Contextual(nn.Module):
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
             dropout=dropout)
-
+        # docs的embedding过bert
         self.encoder_docs = Encoder_high(
             len_max_seq=args.max_doclen,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
@@ -259,11 +259,10 @@ class Contextual(nn.Module):
             dropout=dropout)
 
         # get the scores of all the documents
-        self.score_all_7_layer = MLP2(d_word_vec, 1)
         self.feature_layer=nn.Sequential(nn.Linear(98, 1),nn.Tanh())
         self.multiheadattention = MultiHeadAttention(n_head=8, d_model=d_model, d_k=d_k, d_v=d_v)
         self.aggragation_function_token_level = nn.GRU(d_word_vec,d_word_vec,batch_first=True)
-        self.score_8_linear = nn.Sequential(nn.Linear(200, 1), nn.Tanh())
+        self.score_8_linear = nn.Sequential(nn.Linear(100, 1), nn.Tanh())
         self.score_layer = nn.Linear(7, 1)
 
         self.embedding = nn.Embedding(len(vocabulary)+1, self.d_word_vec)
@@ -347,8 +346,8 @@ class Contextual(nn.Module):
 
         ################################## fine grained interaction starts ########################################
         batch_docslen_doclen_vec = self.embedding(docs)
-        for i in range(batch_docslen_doclen_vec.shape[1]):
-            batch_docslen_doclen_vec[:, i], *_ = self.encoder_docs(batch_docslen_doclen_vec[:, i], docs[:, i])
+        # for i in range(batch_docslen_doclen_vec.shape[1]):
+        #     batch_docslen_doclen_vec[:, i], *_ = self.encoder_docs(batch_docslen_doclen_vec[:, i], docs[:, i])
 
         doc1_doclen_vec = torch.stack([batch_docslen_doclen_vec[i, doc1_order[i], :, :] for i in range(len(doc1_order))])
         doc2_doclen_vec = torch.stack([batch_docslen_doclen_vec[i, doc2_order[i], :, :] for i in range(len(doc1_order))])
@@ -361,10 +360,10 @@ class Contextual(nn.Module):
         doc2_seq_interaction = torch.squeeze(doc2_seq_interaction, 0)
 
         # concat the user interest
-        doc1_seq_interaction_interest = torch.cat((doc1_seq_interaction, qenc_output_5.squeeze(1)), 1)
-        doc2_seq_interaction_interest = torch.cat((doc2_seq_interaction, qenc_output_5.squeeze(1)), 1)
-        score_1_8 = self.score_8_linear(doc1_seq_interaction_interest)
-        score_2_8 = self.score_8_linear(doc2_seq_interaction_interest)
+        # doc1_seq_interaction_interest = torch.cat((doc1_seq_interaction, qenc_output_5.squeeze(1)), 1)
+        # doc2_seq_interaction_interest = torch.cat((doc2_seq_interaction, qenc_output_5.squeeze(1)), 1)
+        score_1_8 = self.score_8_linear(doc1_seq_interaction)
+        score_2_8 = self.score_8_linear(doc2_seq_interaction)
         ################################## fine grained interaction ends ########################################
         score1_all = torch.cat([score_1_1, score_1_2, score_1_3, score_1_4, score_1_5, score_1_6, score_1_8], 1)
         score2_all = torch.cat([score_2_1, score_2_2, score_2_3, score_2_4, score_2_5, score_2_6, score_2_8], 1)

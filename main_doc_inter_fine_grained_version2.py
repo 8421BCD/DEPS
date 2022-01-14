@@ -1,5 +1,5 @@
 '''
-    This is an experiment which uses coarse-grained documents interaction
+    This is an experiment which uses coarse-grained documents interaction(qs)
 '''
 import random
 import torch
@@ -25,8 +25,8 @@ parser.add_argument('--batch_size', default=64, type=int, help='')
 parser.add_argument('--max_querylen', default=25, type=int, help='the maximum length of query')
 parser.add_argument('--max_doclen', default=25, type=int, help='the maximum length of document')
 parser.add_argument('--max_qdlen', default=50, type=int, help='the maximum length of the concat of query and document')
-parser.add_argument('--max_hislen', default=25, type=int, help='the maximum length of the long history')
-parser.add_argument('--max_sessionlen', default=5, type=int, help='the maximum length of the session')
+parser.add_argument('--max_hislen', default=50, type=int, help='the maximum length of the long history')
+parser.add_argument('--max_sessionlen', default=20, type=int, help='the maximum length of the session')
 parser.add_argument('--max_doc_list_train', default=5, type=int, help='the maximum size of the document set of train data') #change
 parser.add_argument('--max_doc_list_test', default=50, type=int, help='the maximum size of the document set of test data') #change
 parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
@@ -54,6 +54,8 @@ elif args.mode == 1:
 
 vocab = pickle.load(open('../../data/vocab.dict', 'rb'))
 mistake = pickle.load(open('../../data/mistake.dict', 'rb'))
+# print(vocab['sep'])
+# 17244
 
 def set_seed(seed=0):
     random.seed(seed)
@@ -99,7 +101,7 @@ def sen2id(sen):
 	idx = idx[:args.max_qdlen]
 	padding = [0] * (args.max_qdlen - len(idx))
 	idx = idx + padding
-	return	idx
+	return idx
 
 def divide_dataset(filename):  # 检查用户的实验数据中有几个session，滤掉少于一定session的用户
 	session_sum = 0
@@ -183,35 +185,33 @@ def prepare_train_data(sat_list, feature_list, doc_list, qids, long_qdids, short
 		return
 	short_qdids_his = short_qdids[-args.max_sessionlen:]
 	long_qdids_his = long_qdids[-args.max_hislen:]
-	# init_short_qdids = np.zeros((args.max_sessionlen, args.max_qdlen))
-	# init_long_qdids = np.zeros((args.max_hislen, args.max_qdlen))
-	init_short_qdids = np.zeros((args.max_sessionlen, args.max_doc_list_test + 1, args.max_doclen))
-	init_long_qdids = np.zeros((args.max_hislen, args.max_doc_list_test + 1, args.max_doclen))
+	init_short_qdids = np.zeros((args.max_sessionlen,args.max_qdlen))
+	init_long_qdids = np.zeros((args.max_hislen,args.max_qdlen))
 	# ??? don't understand all the code below
 	init_shortpos = np.zeros(args.max_sessionlen+1)
 	init_shortpos[-1] = args.max_sessionlen+1
 	init_longpos = np.zeros(args.max_hislen+1)
 	init_longpos[-1] = args.max_hislen+1
 
-	# for i in range(args.max_sessionlen):
-	# 	init_short_qdids[i][0]=1
+	for i in range(args.max_sessionlen):
+		init_short_qdids[i][0]=1
 	for i in range(len(short_qdids_his)):
 		init_short_qdids[i] = short_qdids_his[i]
 		init_shortpos[i] = i+1
-	# for i in range(args.max_hislen):
-	# 	init_long_qdids[i][0]=1
+	for i in range(args.max_hislen):
+		init_long_qdids[i][0]=1
 	for i in range(len(long_qdids_his)):
 		init_long_qdids[i] = long_qdids_his[i]
 		init_longpos[i] = i+1
 	## update
 	doc_list = doc_list[:args.max_doc_list_train]
-	init_docids = np.zeros((args.max_doc_list_train, args.max_doclen))
-	init_docpos = np.zeros(args.max_doc_list_train + 1)
-	init_docpos[-1] = len(doc_list) + 1
+	init_docids = np.zeros((args.max_doc_list_train, 1 + args.max_doclen))
+	init_docpos = np.zeros(args.max_doc_list_train)
+
 	for i in range(args.max_doc_list_train):
 		init_docids[i][0]=1
 	for i in range(len(doc_list)):
-		init_docids[i] = doc_list[i]
+		init_docids[i] = [17244] + doc_list[i]
 		init_docpos[i] = i+1
 	
 	delta = cal_delta(sat_list)
@@ -261,23 +261,22 @@ def prepare_test_data(short_qdids, long_qdids, qids, feature_list, line_list, do
 	for docid in range(len(doc_list)):
 		short_qdids_his = short_qdids[-args.max_sessionlen:]
 		long_qdids_his = long_qdids[-args.max_hislen:]
-
-		# init_short_qdids = np.zeros((args.max_sessionlen, args.max_qdlen))
-		# init_long_qdids = np.zeros((args.max_hislen, args.max_qdlen))
-		init_short_qdids = np.zeros((args.max_sessionlen, args.max_doc_list_test + 1, args.max_doclen))
-		init_long_qdids = np.zeros((args.max_hislen, args.max_doc_list_test + 1, args.max_doclen))
+		init_short_qdids = np.zeros((args.max_sessionlen,args.max_qdlen))
+		init_long_qdids = np.zeros((args.max_hislen,args.max_qdlen))
 		init_shortpos = np.zeros(args.max_sessionlen+1)
 		init_shortpos[-1] = args.max_sessionlen+1
 		init_longpos = np.zeros(args.max_hislen+1)
 		init_longpos[-1] = args.max_hislen+1
 
-		# for i in range(args.max_sessionlen):  # ???????????????????????????
-		# 	init_short_qdids[i][0]=1
+		# init_sessionpos = np.zeros(args.max_sessionlen+1)
+		# init_sessionpos[-1] = args.max_sessionlen+1
+		for i in range(args.max_sessionlen):
+			init_short_qdids[i][0]=1
 		for i in range(len(short_qdids_his)):
 			init_short_qdids[i] = short_qdids_his[i]
 			init_shortpos[i] = i+1
-		# for i in range(args.max_hislen):
-		# 	init_long_qdids[i][0]=1
+		for i in range(args.max_hislen):
+			init_long_qdids[i][0]=1
 		for i in range(len(long_qdids_his)):
 			init_long_qdids[i] = long_qdids_his[i]
 			init_longpos[i] = i+1
@@ -291,13 +290,13 @@ def prepare_test_data(short_qdids, long_qdids, qids, feature_list, line_list, do
 		lines_test.append(line_list[docid].strip('\n'))
 		doc_order_test.append(docid)
 		
-		init_docids = np.zeros((args.max_doc_list_test, args.max_doclen))
-		init_docpos = np.zeros(args.max_doc_list_test + 1)
-		init_docpos[-1] = args.max_doc_list_test + 1
+		init_docids = np.zeros((args.max_doc_list_test, 1 + args.max_doclen))
+		init_docpos = np.zeros(args.max_doc_list_test)
+		
 		for i in range(args.max_doc_list_test):
 			init_docids[i][0]=1
 		for i in range(len(doc_list)):
-			init_docids[i] = doc_list[i]
+			init_docids[i] = [17244] + doc_list[i]
 			init_docpos[i] = i+1
 		docs_list_test.append(init_docids)
 		docs_pos_test.append(init_docpos)
@@ -342,7 +341,8 @@ def predata():
 			#ser, sessionid, querytime, query, url, title, sat = line.strip().split('\t')
 			queryid = sessionid + querytime + query
 			qids = sen2qid(query)
-			dids = sen2did(title)
+			dids = sen2did(title)			
+
 			if queryid != last_queryid:
 				if last_querytime >= '2006-04-03 00:00:00' and last_querytime <= '2006-05-16 00:00:00' and key == 1: # training data
 					prepare_train_data(sat_list, feature_list, doc_list, last_qids, long_qdids, short_qdids)
@@ -350,18 +350,8 @@ def predata():
 				elif last_querytime > '2006-05-16 00:00:00':
 					prepare_test_data(short_qdids, long_qdids, last_qids, feature_list, line_list, doc_list)
 				if intent != '':	# ??? what about the last query
-					doc_list = doc_list[:args.max_doc_list_test]
-					# print(sat_list)
-					sat_idx = sat_list.index('1')
-					# put the sat on the second place(next to the query)
-					doc_list[0], doc_list[sat_idx] = doc_list[sat_idx], doc_list[0]
-					doc_list.insert(0, qids)
-					doc_list += [[0] * args.max_doclen for i in range(args.max_doc_list_test - len(doc_list) + 1)]
-					# if len(doc_list) > 6:
-					# 	print(len(doc_list))
-					short_qdids.append(doc_list)
-					# qdids = sen2id(intent)
-					# short_qdids.append(qdids)
+					qdids = sen2id(intent)
+					short_qdids.append(qdids)
 				if sessionid != last_sessionid:
 					if len(short_qdids) != 0:
 						long_qdids.extend(short_qdids)
@@ -528,4 +518,4 @@ if __name__ == '__main__':
 			evaluation.evaluate(f, args.result_path, epoch + 1, logger)
 
 	
-	
+		

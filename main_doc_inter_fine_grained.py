@@ -6,7 +6,7 @@ import torch
 import pickle
 import numpy as np
 from torch.functional import Tensor
-from model.Model_doc_inter_fine_grained_trans import Contextual
+from model.Model_doc_inter_fine_grained import Contextual
 import Constants
 import torch
 import torch.nn as nn
@@ -27,7 +27,7 @@ parser.add_argument('--max_doclen', default=25, type=int, help='the maximum leng
 parser.add_argument('--max_qdlen', default=50, type=int, help='the maximum length of the concat of query and document')
 parser.add_argument('--max_hislen', default=50, type=int, help='the maximum length of the long history')
 parser.add_argument('--max_sessionlen', default=20, type=int, help='the maximum length of the session')
-parser.add_argument('--max_doc_list_train', default=50, type=int, help='the maximum size of the document set of train data') #change
+parser.add_argument('--max_doc_list_train', default=5, type=int, help='the maximum size of the document set of train data') #change
 parser.add_argument('--max_doc_list_test', default=50, type=int, help='the maximum size of the document set of test data') #change
 parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 parser.add_argument('--epochs', default=10, type=int, help='')	# change
@@ -104,7 +104,7 @@ def sen2id(sen):
 			idx.append(vocab[word])
 		else:
 			idx.append(vocab['<unk>'])
-	idx = idx[:args.max_querylen]
+	idx = idx[:args.max_qdlen]
 	padding = [0] * (args.max_qdlen - len(idx))
 	idx = idx + padding
 	return idx

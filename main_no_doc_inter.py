@@ -22,8 +22,8 @@ parser.add_argument('--mode', default=1, type=int, help='0-check whether the cod
 parser.add_argument('--cudaid', default=0, type=int, help='the id of the cuda')
 parser.add_argument('--seed', default=100, type=int, help='')
 parser.add_argument('--batch_size', default=64, type=int, help='')
-parser.add_argument('--max_querylen', default=25, type=int, help='the maximum length of query')
-parser.add_argument('--max_doclen', default=25, type=int, help='the maximum length of document')
+parser.add_argument('--max_querylen', default=20, type=int, help='the maximum length of query')
+parser.add_argument('--max_doclen', default=30, type=int, help='the maximum length of document')
 parser.add_argument('--max_qdlen', default=50, type=int, help='the maximum length of the concat of query and document')
 parser.add_argument('--max_hislen', default=50, type=int, help='the maximum length of the long history')
 parser.add_argument('--max_sessionlen', default=20, type=int, help='the maximum length of the session')
@@ -53,15 +53,6 @@ elif args.mode == 1:
 	filenames = filenames[:30000]
 
 vocab = pickle.load(open('../../data/vocab.dict', 'rb'))
-mistake = pickle.load(open('../../data/mistake.dict', 'rb'))
-#device_ids = [0, 1]
-# args.batch_size = 64
-# args.max_querylen = 20
-# args.max_doclen = 30
-# args.max_qdlen = 50
-# args.max_hislen = 50
-# args.max_sessionlen = 20
-# args.max_doc_list = 50
 
 def set_seed(seed=0):
     random.seed(seed)
@@ -104,7 +95,7 @@ def sen2id(sen):
 			idx.append(vocab[word])
 		else:
 			idx.append(vocab['<unk>'])
-	idx = idx[:args.max_querylen]
+	idx = idx[:args.max_qdlen]
 	padding = [0] * (args.max_qdlen - len(idx))
 	idx = idx + padding
 	return idx
